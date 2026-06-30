@@ -473,6 +473,10 @@ void disarm(flightLogDisarmReason_e reason)
 
         flipOverAfterCrashActive = false;
 
+#ifdef USE_MSP_MOTOR_OVERRIDE
+        mixerResetMotorOverride();
+#endif
+
         // if ARMING_DISABLED_RUNAWAY_TAKEOFF is set then we want to play it's beep pattern instead
         if (!(getArmingDisableFlags() & (ARMING_DISABLED_RUNAWAY_TAKEOFF | ARMING_DISABLED_CRASH_DETECTED))) {
             beeper(BEEPER_DISARMING);      // emit disarm tone

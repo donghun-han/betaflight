@@ -2905,6 +2905,24 @@ static mspResult_e mspProcessInCommand(mspDescriptor_t srcDesc, int16_t cmdMSP, 
         }
         break;
 
+#ifdef USE_MSP_MOTOR_OVERRIDE
+    case MSP_SET_MOTOR_OVERRIDE:
+        // Only latch override values while armed with both MSP OVERRIDE and MOTOR CTRL active,
+        // so the pilot retains the radio as a kill switch. Otherwise consume the payload only.
+        if (ARMING_FLAG(ARMED) && IS_RC_MODE_ACTIVE(BOXMSPOVERRIDE) && IS_RC_MODE_ACTIVE(BOXMOTORCTRL)) {
+            for (int i = 0; i < getMotorCount(); i++) {
+                motor_override[i] = motorConvertFromExternal(sbufReadU16(src));
+            }
+            motorOverrideActive = true;
+        } else {
+            for (int i = 0; i < getMotorCount(); i++) {
+                sbufReadU16(src);
+            }
+            motorOverrideActive = false;
+        }
+        break;
+#endif
+
     case MSP_SET_SERVO_CONFIGURATION:
 #ifdef USE_SERVOS
         if (dataSize != 1 + 12) {

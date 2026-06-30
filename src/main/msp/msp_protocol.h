@@ -310,6 +310,7 @@
 #define MSP_SELECT_SETTING       210    //in message          Select Setting Number (0-2)
 #define MSP_SET_HEADING          211    //in message          define a new heading hold direction
 #define MSP_SET_SERVO_CONFIGURATION 212    //in message          Servo settings
+#define MSP_SET_MOTOR_OVERRIDE   213    //in message          per-motor override values (1000-2000), applied while armed when MSP OVERRIDE + MOTOR CTRL boxes are active
 #define MSP_SET_MOTOR            214    //in message          PropBalance function
 #define MSP_SET_NAV_CONFIG       215    //in message          Sets nav config parameters - write to the eeprom
 #define MSP_SET_MOTOR_3D_CONFIG  217    //in message          Settings needed for reversible ESCs

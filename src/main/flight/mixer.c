@@ -71,6 +71,10 @@ static FAST_DATA_ZERO_INIT float motorMixRange;
 
 float FAST_DATA_ZERO_INIT motor[MAX_SUPPORTED_MOTORS];
 float motor_disarmed[MAX_SUPPORTED_MOTORS];
+#ifdef USE_MSP_MOTOR_OVERRIDE
+float motor_override[MAX_SUPPORTED_MOTORS];
+bool motorOverrideActive = false;
+#endif
 
 static FAST_DATA_ZERO_INIT int throttleAngleCorrection;
 
@@ -449,6 +453,48 @@ static void applyMotorStop(void)
     }
 }
 
+#ifdef USE_MSP_MOTOR_OVERRIDE
+void mixerResetMotorOverride(void)
+{
+    motorOverrideActive = false;
+    for (int i = 0; i < MAX_SUPPORTED_MOTORS; i++) {
+        motor_override[i] = 0.0f;
+    }
+}
+
+// Direct per-motor override from an external controller (e.g. companion computer).
+// Active while armed when both the MSP override and MOTOR CTRL boxes are on. In this mode the
+// motors are driven ONLY by override frames, so the pilot can always cut it from the radio.
+// Until a valid frame has been received (motorOverrideActive), the motors are held off rather
+// than letting the mixer drive them. Stale values from a previous arm are never reapplied
+// because the override is reset on disarm and on mode exit.
+static void applyMotorOverride(void)
+{
+    const bool enabled = ARMING_FLAG(ARMED)
+        && IS_RC_MODE_ACTIVE(BOXMSPOVERRIDE)
+        && IS_RC_MODE_ACTIVE(BOXMOTORCTRL);
+
+    if (!enabled) {
+        if (motorOverrideActive) {
+            mixerResetMotorOverride();
+        }
+        return;
+    }
+
+    if (motorOverrideActive) {
+        for (int i = 0; i < mixerRuntime.motorCount; i++) {
+            motor[i] = constrainf(motor_override[i], motorRangeMin, motorRangeMax);
+        }
+    } else {
+        // armed in motor control mode but no override frame yet: hold motors at armed idle
+        // (not off) so the pilot still gets the normal arming spin-up feedback
+        for (int i = 0; i < mixerRuntime.motorCount; i++) {
+            motor[i] = motorRangeMin;
+        }
+    }
+}
+#endif
+
 #ifdef USE_DYN_LPF
 static void updateDynLpfCutoffs(timeUs_t currentTimeUs, float throttle)
 {
@@ -760,6 +806,10 @@ FAST_CODE_NOINLINE void mixTable(timeUs_t currentTimeUs)
         // Apply the mix to motor endpoints
         applyMixToMotors(motorMix, activeMixer);
     }
+
+#ifdef USE_MSP_MOTOR_OVERRIDE
+    applyMotorOverride();
+#endif
 }
 
 void mixerSetThrottleAngleCorrection(int correctionValue)

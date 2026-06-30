@@ -119,6 +119,11 @@ PG_DECLARE(mixerConfig_t, mixerConfig);
 extern const mixer_t mixers[];
 extern float motor[MAX_SUPPORTED_MOTORS];
 extern float motor_disarmed[MAX_SUPPORTED_MOTORS];
+#ifdef USE_MSP_MOTOR_OVERRIDE
+extern float motor_override[MAX_SUPPORTED_MOTORS];
+extern bool motorOverrideActive;
+void mixerResetMotorOverride(void);
+#endif
 struct rxConfig_s;
 
 uint8_t getMotorCount(void);
