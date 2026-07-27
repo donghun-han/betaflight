@@ -1,5 +1,6 @@
 
 CONFIGS_REPO_URL ?= https://github.com/betaflight/config
+CONFIGS_REPO_BRANCH ?= 4.5-config
 
 BASE_CONFIGS      = $(sort $(notdir $(patsubst %/,%,$(dir $(wildcard $(CONFIG_DIR)/configs/*/config.h)))))
 
@@ -52,9 +53,11 @@ endif #config
 configs:
 ifeq ($(wildcard $(CONFIG_DIR)),)
 	@echo "Hydrating clone for configs: $(CONFIG_DIR)"
-	$(V0) git clone $(CONFIGS_REPO_URL) $(CONFIG_DIR)
+	$(V0) git clone --branch $(CONFIGS_REPO_BRANCH) --single-branch $(CONFIGS_REPO_URL) $(CONFIG_DIR)
 else
-	$(V0) git -C $(CONFIG_DIR) pull origin
+	$(V0) git -C $(CONFIG_DIR) fetch origin $(CONFIGS_REPO_BRANCH)
+	$(V0) git -C $(CONFIG_DIR) checkout $(CONFIGS_REPO_BRANCH)
+	$(V0) git -C $(CONFIG_DIR) pull --ff-only origin $(CONFIGS_REPO_BRANCH)
 endif
 
 $(BASE_CONFIGS):
