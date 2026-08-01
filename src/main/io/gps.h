@@ -27,6 +27,9 @@
 #include "common/time.h"
 
 #include "io/serial.h"
+#ifdef USE_EXT_STATE
+#include "io/ext_state.h"
+#endif
 
 #include "pg/gps.h"
 
@@ -390,6 +393,9 @@ bool gpsNewFrame(uint8_t c);
 bool gpsIsHealthy(void); // Returns true when the gps state is RECEIVING_DATA
 struct serialPort_s;
 void gpsEnablePassthrough(struct serialPort_s *gpsPassthroughPort);
+#ifdef USE_EXT_STATE
+bool updateExtState(extState_t* newExtState);
+#endif
 void onGpsNewData(void);
 void GPS_reset_home_position(void);
 void GPS_calc_longitude_scaling(int32_t lat);

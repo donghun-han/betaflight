@@ -36,6 +36,8 @@
 #define M_PIf       3.14159265358979323846f
 #define M_EULERf    2.71828182845904523536f
 
+#define EARTH_RADIUS_M 6371000.0f
+
 #define RAD    (M_PIf / 180.0f)
 #define DEGREES_TO_DECIDEGREES(angle) ((angle) * 10)
 #define DECIDEGREES_TO_DEGREES(angle) ((angle) / 10)
@@ -85,7 +87,7 @@ typedef struct fp_vector {
 typedef union u_fp_vector {
     float A[3];
     t_fp_vector_def V;
-} t_fp_vector;
+} fp_vector_t;
 
 // Floating point Euler angles.
 // Be carefull, could be either of degrees or radians.
@@ -103,6 +105,13 @@ typedef union {
 typedef struct fp_rotationMatrix_s {
     float m[3][3];              // matrix
 } fp_rotationMatrix_t;
+
+typedef struct fp_quaternion_s {
+    float w;
+    float x;
+    float y;
+    float z;
+} fp_quaternion_t;
 
 int gcd(int num, int denom);
 int32_t applyDeadband(int32_t value, int32_t deadband);

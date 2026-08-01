@@ -2596,12 +2596,49 @@ void GPS_calculateDistanceAndDirectionToHome(void)
     }
 }
 
+#ifdef USE_EXT_STATE
+bool updateExtState(extState_t* newExtState) {
+    if (!STATE(GPS_FIX) || !STATE(GPS_FIX_HOME)) {
+        return false;
+    }
+    newExtState->source = EXT_STATE_GPS;
+    newExtState->time_us = micros(); // should i use gps time?
+
+    // llh to local
+    // here we don't use exact conversion because we don't need long range accuracy
+    // 1. earth is assumed to be a sphere
+    // 2. we don't consider curvature of the earth.
+    // 3. we don't believe gps altitude. Use baro or VIO instead
+    fp_vector_t local;
+    gpsLocation_t home = {GPS_home[GPS_LATITUDE], GPS_home[GPS_LONGITUDE], 0};
+
+    local.V.X = 1e-7f * DEGREES_TO_RADIANS(gpsSol.llh.lat - home.lat) * EARTH_RADIUS_M;
+    local.V.Y = 1e-7f * DEGREES_TO_RADIANS(gpsSol.llh.lon - home.lon) * EARTH_RADIUS_M 
+        * cos_approx(1e-7f * DEGREES_TO_RADIANS(home.lat));
+    local.V.Z = -1e-2f * (gpsSol.llh.altCm - home.altCm);
+
+    newExtState->pos = local;
+
+    newExtState->is_vel_valid = false;
+    newExtState->is_quat_valid = false;
+
+    return true;
+}
+#endif // USE_EXT_STATE
+
 void onGpsNewData(void)
 {
     if (!STATE(GPS_FIX)) {
         // if we don't have a 3D fix don't give data to GPS rescue
         return;
     }
+
+#ifdef USE_EXT_STATE
+    extState_t newExtState = { 0 };
+    if (updateExtState(&newExtState)) {
+        setExtState(&newExtState);
+    }
+#endif // USE_EXT_STATE
 
     gpsDataIntervalSeconds = gpsSol.navIntervalMs / 1000.0f;
 
@@ -2639,4 +2676,3 @@ baudRate_e getGpsPortActualBaudRateIndex(void)
 }
 
 #endif // USE_GPS
-

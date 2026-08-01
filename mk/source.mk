@@ -63,6 +63,7 @@ COMMON_SRC = \
             io/transponder_ir.c \
             io/usb_cdc_hid.c \
             io/usb_msc.c \
+            io/ext_state.c \
             msp/msp.c \
             msp/msp_box.c \
             msp/msp_build_info.c \

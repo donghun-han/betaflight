@@ -71,6 +71,9 @@
 #include "flight/position.h"
 
 #include "io/beeper.h"
+#ifdef USE_EXT_STATE
+#include "io/ext_state.h"
+#endif
 #include "io/gps.h"
 #include "io/serial.h"
 
@@ -105,6 +108,9 @@ PG_RESET_TEMPLATE(blackboxConfig_t, blackboxConfig,
 STATIC_ASSERT((sizeof(blackboxConfig()->fields_disabled_mask) * 8) >= FLIGHT_LOG_FIELD_SELECT_COUNT, too_many_flight_log_fields_selections);
 
 #define BLACKBOX_SHUTDOWN_TIMEOUT_MILLIS 200
+#define BLACKBOX_EXT_STATE_POS_SCALE 1000.0f
+#define BLACKBOX_EXT_STATE_VEL_SCALE 1000.0f
+#define BLACKBOX_EXT_STATE_QUAT_SCALE 1000000.0f
 
 // Some macros to make writing FLIGHT_LOG_FIELD_* constants shorter:
 
@@ -268,6 +274,20 @@ static const blackboxDeltaFieldDefinition_t blackboxMainFields[] = {
     {"eRPM",  6, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(MOTOR_7_HAS_RPM)},
     {"eRPM",  7, UNSIGNED, .Ipredict = PREDICT(0),       .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS),      .Pencode = ENCODING(SIGNED_VB), CONDITION(MOTOR_8_HAS_RPM)},
 #endif /* USE_DSHOT_TELEMETRY */
+
+#ifdef USE_EXT_STATE
+    {"extStateTime",  -1, UNSIGNED, .Ipredict = PREDICT(0), .Iencode = ENCODING(UNSIGNED_VB), .Ppredict = PREDICT(PREVIOUS), .Pencode = ENCODING(SIGNED_VB), CONDITION(EXT_STATE)},
+    {"extStatePos",    0, SIGNED,   .Ipredict = PREDICT(0), .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS), .Pencode = ENCODING(SIGNED_VB), CONDITION(EXT_STATE)},
+    {"extStatePos",    1, SIGNED,   .Ipredict = PREDICT(0), .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS), .Pencode = ENCODING(SIGNED_VB), CONDITION(EXT_STATE)},
+    {"extStatePos",    2, SIGNED,   .Ipredict = PREDICT(0), .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS), .Pencode = ENCODING(SIGNED_VB), CONDITION(EXT_STATE)},
+    {"extStateVel",    0, SIGNED,   .Ipredict = PREDICT(0), .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS), .Pencode = ENCODING(SIGNED_VB), CONDITION(EXT_STATE)},
+    {"extStateVel",    1, SIGNED,   .Ipredict = PREDICT(0), .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS), .Pencode = ENCODING(SIGNED_VB), CONDITION(EXT_STATE)},
+    {"extStateVel",    2, SIGNED,   .Ipredict = PREDICT(0), .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS), .Pencode = ENCODING(SIGNED_VB), CONDITION(EXT_STATE)},
+    {"extStateQuat",   0, SIGNED,   .Ipredict = PREDICT(0), .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS), .Pencode = ENCODING(SIGNED_VB), CONDITION(EXT_STATE)},
+    {"extStateQuat",   1, SIGNED,   .Ipredict = PREDICT(0), .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS), .Pencode = ENCODING(SIGNED_VB), CONDITION(EXT_STATE)},
+    {"extStateQuat",   2, SIGNED,   .Ipredict = PREDICT(0), .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS), .Pencode = ENCODING(SIGNED_VB), CONDITION(EXT_STATE)},
+    {"extStateQuat",   3, SIGNED,   .Ipredict = PREDICT(0), .Iencode = ENCODING(SIGNED_VB),   .Ppredict = PREDICT(PREVIOUS), .Pencode = ENCODING(SIGNED_VB), CONDITION(EXT_STATE)},
+#endif
 };
 
 #ifdef USE_GPS
@@ -352,6 +372,13 @@ typedef struct blackboxMainState_s {
     int32_t surfaceRaw;
 #endif
     uint16_t rssi;
+
+#ifdef USE_EXT_STATE
+    uint32_t extStateTime;
+    int32_t extStatePos[XYZ_AXIS_COUNT];
+    int32_t extStateVel[XYZ_AXIS_COUNT];
+    int32_t extStateQuat[4];
+#endif
 } blackboxMainState_t;
 
 typedef struct blackboxGpsState_s {
@@ -534,6 +561,11 @@ static bool testBlackboxConditionUncached(FlightLogFieldCondition condition)
     case CONDITION(DEBUG_LOG):
         return (debugMode != DEBUG_NONE) && isFieldEnabled(FIELD_SELECT(DEBUG_LOG));
 
+#ifdef USE_EXT_STATE
+    case CONDITION(EXT_STATE):
+        return isFieldEnabled(FIELD_SELECT(EXT_STATE));
+#endif
+
     case CONDITION(NEVER):
         return false;
 
@@ -710,6 +742,15 @@ static void writeIntraframe(void)
     }
 #endif
 
+#ifdef USE_EXT_STATE
+    if (testBlackboxCondition(CONDITION(EXT_STATE))) {
+        blackboxWriteUnsignedVB(blackboxCurrent->extStateTime);
+        blackboxWriteSignedVBArray(blackboxCurrent->extStatePos, XYZ_AXIS_COUNT);
+        blackboxWriteSignedVBArray(blackboxCurrent->extStateVel, XYZ_AXIS_COUNT);
+        blackboxWriteSignedVBArray(blackboxCurrent->extStateQuat, 4);
+    }
+#endif
+
     //Rotate our history buffers:
 
     //The current state becomes the new "before" state
@@ -860,6 +901,21 @@ static void writeInterframe(void)
             if (testBlackboxCondition(CONDITION(MOTOR_1_HAS_RPM) + x)) {
                 blackboxWriteSignedVB(blackboxCurrent->erpm[x] - blackboxLast->erpm[x]);
             }
+        }
+    }
+#endif
+
+#ifdef USE_EXT_STATE
+    if (testBlackboxCondition(CONDITION(EXT_STATE))) {
+        blackboxWriteSignedVB((int32_t)(blackboxCurrent->extStateTime - blackboxLast->extStateTime));
+        for (int x = 0; x < XYZ_AXIS_COUNT; x++) {
+            blackboxWriteSignedVB(blackboxCurrent->extStatePos[x] - blackboxLast->extStatePos[x]);
+        }
+        for (int x = 0; x < XYZ_AXIS_COUNT; x++) {
+            blackboxWriteSignedVB(blackboxCurrent->extStateVel[x] - blackboxLast->extStateVel[x]);
+        }
+        for (int x = 0; x < 4; x++) {
+            blackboxWriteSignedVB(blackboxCurrent->extStateQuat[x] - blackboxLast->extStateQuat[x]);
         }
     }
 #endif
@@ -1184,6 +1240,18 @@ static void loadMainState(timeUs_t currentTimeUs)
 #endif
 
     blackboxCurrent->rssi = getRssi();
+
+#ifdef USE_EXT_STATE
+    blackboxCurrent->extStateTime = extState.time_us;
+    for (int i = 0; i < XYZ_AXIS_COUNT; i++) {
+        blackboxCurrent->extStatePos[i] = lrintf(extState.pos.A[i] * BLACKBOX_EXT_STATE_POS_SCALE);
+        blackboxCurrent->extStateVel[i] = lrintf(extState.vel.A[i] * BLACKBOX_EXT_STATE_VEL_SCALE);
+    }
+    blackboxCurrent->extStateQuat[0] = lrintf(extState.quat.w * BLACKBOX_EXT_STATE_QUAT_SCALE);
+    blackboxCurrent->extStateQuat[1] = lrintf(extState.quat.x * BLACKBOX_EXT_STATE_QUAT_SCALE);
+    blackboxCurrent->extStateQuat[2] = lrintf(extState.quat.y * BLACKBOX_EXT_STATE_QUAT_SCALE);
+    blackboxCurrent->extStateQuat[3] = lrintf(extState.quat.z * BLACKBOX_EXT_STATE_QUAT_SCALE);
+#endif
 
 #ifdef USE_SERVOS
     //Tail servo for tricopters
@@ -1581,6 +1649,11 @@ static bool blackboxWriteSysinfo(void)
 
         BLACKBOX_PRINT_HEADER_LINE("fields_disabled_mask", "%d",            blackboxConfig()->fields_disabled_mask);
         BLACKBOX_PRINT_HEADER_LINE("blackbox_high_resolution", "%d",        blackboxConfig()->high_resolution);
+#ifdef USE_EXT_STATE
+        BLACKBOX_PRINT_HEADER_LINE("ext_state_pos_scale", "%d",             (int)BLACKBOX_EXT_STATE_POS_SCALE);
+        BLACKBOX_PRINT_HEADER_LINE("ext_state_vel_scale", "%d",             (int)BLACKBOX_EXT_STATE_VEL_SCALE);
+        BLACKBOX_PRINT_HEADER_LINE("ext_state_quat_scale", "%d",            (int)BLACKBOX_EXT_STATE_QUAT_SCALE);
+#endif
 
 #ifdef USE_BATTERY_VOLTAGE_SAG_COMPENSATION
         BLACKBOX_PRINT_HEADER_LINE(PARAM_NAME_VBAT_SAG_COMPENSATION, "%d",   currentPidProfile->vbat_sag_compensation);
